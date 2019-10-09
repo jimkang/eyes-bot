@@ -242,7 +242,7 @@ async function addEyesInBoxes({ buffer, eyeBoxes }, done) {
 
   function addEyesInBox(eyeBox) {
     // eyeBox values are normalized to 0.0 to 1.0.
-    const eyeHeight =
+    const eyeY =
       eyeBox.top +
       ((eyeBox.bottom - eyeBox.top) * 0.66 * probable.roll(100)) / 100;
     var eyeXDistFromCenter =
@@ -252,27 +252,32 @@ async function addEyesInBoxes({ buffer, eyeBoxes }, done) {
     }
     var eyeImage = probable.pick(eyeImages).clone();
 
-    const centerX = eyeBox.left + (eyeBox.right - eyeBox.left) / 2;
+    const eyeWidth = eyeXDistFromCenter * 0.9;
+    const centerX =
+      eyeBox.left + (eyeBox.right - eyeBox.left) / 2 - eyeWidth / 2;
+    /*
+    // For now, eye images are all pairs of eyes.
     const leftEyeX = centerX - eyeXDistFromCenter;
     const rightEyeX = centerX + eyeXDistFromCenter;
     // TODO: Take into account size of eye image.
     const leftEyeDestX = image.bitmap.width * leftEyeX;
     const rightEyeDestX = image.bitmap.width * rightEyeX;
-    const eyeDestY = image.bitmap.height * eyeHeight;
+    */
+    const eyeDestX = image.bitmap.width * centerX;
+    const eyeDestY = image.bitmap.height * eyeY;
 
-    const eyeWidth = ((rightEyeX - leftEyeX) / 2) * 0.9;
     eyeImage.resize(eyeWidth * image.bitmap.width, Jimp.AUTO);
     console.log(
       'eye position',
       'left',
-      leftEyeDestX,
+      eyeDestX,
       'right',
-      rightEyeDestX,
+      eyeDestX,
       'y',
       eyeDestY
     );
-    image.composite(eyeImage, leftEyeDestX, eyeDestY);
-    image.composite(eyeImage, rightEyeDestX, eyeDestY);
+    image.composite(eyeImage, eyeDestX, eyeDestY);
+    //image.composite(eyeImage, rightEyeDestX, eyeDestY);
   }
 }
 
