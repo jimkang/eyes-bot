@@ -7,12 +7,12 @@ var waterfall = require('async-waterfall');
 var randomId = require('idmaker').randomId;
 var probable = require('probable');
 var callNextTick = require('call-next-tick');
-var pluck = require('lodash.pluck');
 var fs = require('fs');
 var Jimp = require('jimp');
 var ep = require('errorback-promise');
 var to = require('await-to-js').to;
 var queue = require('d3-queue').queue;
+var getAtPath = require('get-at-path');
 
 var iscool = require('iscool')();
 var sb = require('standard-bail')();
@@ -25,29 +25,15 @@ var eyeImageFiles = [
 
 var eyeImages = [];
 
-var labelsToAvoid = [
-  'font',
-  'black and white',
-  'ancient history',
-  'history',
-  'historic site',
-  'monochrome',
-  'monochrome photography',
-  'still life photography',
-  'photography',
-  'aerial photography',
-  'close up',
-  'painting',
-  'architecture',
-  'mixed use',
-  'residential area',
-  'text'
-];
+var labelsToAvoid = ['font', 'text', 'Font', 'Text', 'Person'];
 
 const imgLinkRegex = /Size of this preview: <a href="([^"]+)"(\s)/;
 const visionAPIURL =
   'https://vision.googleapis.com/v1/images:annotate?key=' +
   config.googleVisionAPIKey;
+
+const eyeProportionOfMaxSizeMin = 0.3;
+const eyeProportionOfMaxSizeMax = 0.7;
 
 const maxTries = 5;
 var tryCount = 0;
@@ -96,25 +82,33 @@ function addEyes(buffer, done) {
   request(requestOpts, sb(placeEyes, done));
 
   async function placeEyes(res, body) {
-    console.log('body:', JSON.stringify(body, null, 2));
-    var response = body.responses[0];
-    var labels = pluck(response.localizedObjectAnnotations, 'name')
-      .filter(labelIsAllowed)
-      .filter(iscool);
-    if (!labels || labels.length < 1) {
+    //console.log('body:', JSON.stringify(body, null, 2));
+    var annotations = getAtPath(body, [
+      'responses',
+      '0',
+      'localizedObjectAnnotations'
+    ]);
+    if (!annotations) {
+      done(new Error('No localizedObjectAnnotations in response.'));
+      return;
+    }
+
+    annotations = annotations.filter(labelIsAllowed);
+    if (annotations.length < 1) {
       done(new Error('No valid names in localizedObjectAnnotations.'));
       return;
     }
-    var label = probable.pickFromArray(labels).replace(/\n/g, '');
-    var comment;
-    if (label) {
-      comment = `The ${label} has eyes!`;
-    }
+    var annotation = probable.pick(annotations);
+    const label = annotation.name.replace(/\n/g, '');
 
-    var eyeBoxes = pluck(
-      pluck(response.localizedObjectAnnotations, 'boundingPoly'),
-      'normalizedVertices'
-    ).map(verticesToBounds);
+    // If we ever want to go back to multiple sets of eyes:
+    //var eyeBoxes = pluck(
+    //  pluck(response.localizedObjectAnnotations, 'boundingPoly'),
+    //  'normalizedVertices'
+    //).map(verticesToBounds);
+    var eyeBoxes = [
+      verticesToBounds(annotation.boundingPoly.normalizedVertices)
+    ];
     console.log('eyeBoxes', eyeBoxes);
 
     var { error, values } = await ep(addEyesInBoxes, { buffer, eyeBoxes });
@@ -123,7 +117,7 @@ function addEyes(buffer, done) {
       return;
     }
 
-    done(null, { comment, label, buffer: values[0] });
+    done(null, { comment: '👀', label, buffer: values[0] });
   }
 }
 
@@ -153,12 +147,12 @@ function postToTargets({ comment, label, buffer }, done) {
     console.log('Wrote', filename);
     callNextTick(done);
   } else {
-    const id = 'labelurself-' + randomId(8);
+    const id = 'eyes-' + randomId(8);
     postIt(
       {
         id,
         text: comment,
-        altText: 'Picture in which one may label oneself',
+        altText: label,
         mediaFilename: id + '.jpg',
         buffer,
         targets: [
@@ -242,31 +236,32 @@ async function addEyesInBoxes({ buffer, eyeBoxes }, done) {
 
   function addEyesInBox(eyeBox) {
     // eyeBox values are normalized to 0.0 to 1.0.
-    const eyeY =
-      eyeBox.top +
-      ((eyeBox.bottom - eyeBox.top) * 0.66 * probable.roll(100)) / 100;
-    var eyeXDistFromCenter =
-      (eyeBox.right - eyeBox.left) / (2 + probable.roll(4));
-    if (eyeXDistFromCenter < 0.01) {
-      eyeXDistFromCenter = 0.01;
-    }
+    const eyeBoxWidth = eyeBox.right - eyeBox.left;
+    const eyeBoxHeight = eyeBox.bottom - eyeBox.top;
+    const eyesMaxWidth = eyeBoxWidth * image.bitmap.width;
+    const eyesMaxHeight = (eyeBox.bottom - eyeBox.top) * image.bitmap.height;
+
     var eyeImage = probable.pick(eyeImages).clone();
+    eyeImage.contain(eyesMaxWidth, eyesMaxHeight);
+    //console.log('eyeImage size', eyeImage.bitmap.width, eyeImage.bitmap.height);
+    const eyeProportionOfMax =
+      eyeProportionOfMaxSizeMin +
+      ((eyeProportionOfMaxSizeMax - eyeProportionOfMaxSizeMin) *
+        probable.roll(100)) /
+        100;
+    console.log('eyeProportionOfMax', eyeProportionOfMax);
+    eyeImage.resize(
+      eyeImage.bitmap.width * eyeProportionOfMax,
+      eyeImage.bitmap.height * eyeProportionOfMax,
+      Jimp.AUTO
+    );
+    //console.log('eyeImage size', eyeImage.bitmap.width, eyeImage.bitmap.height);
 
-    const eyeWidth = eyeXDistFromCenter * 0.9;
-    const centerX =
-      eyeBox.left + (eyeBox.right - eyeBox.left) / 2 - eyeWidth / 2;
-    /*
-    // For now, eye images are all pairs of eyes.
-    const leftEyeX = centerX - eyeXDistFromCenter;
-    const rightEyeX = centerX + eyeXDistFromCenter;
-    // TODO: Take into account size of eye image.
-    const leftEyeDestX = image.bitmap.width * leftEyeX;
-    const rightEyeDestX = image.bitmap.width * rightEyeX;
-    */
-    const eyeDestX = image.bitmap.width * centerX;
-    const eyeDestY = image.bitmap.height * eyeY;
+    const centerX = (eyeBox.left + eyeBoxWidth / 2) * image.bitmap.width;
 
-    eyeImage.resize(eyeWidth * image.bitmap.width, Jimp.AUTO);
+    const eyeDestX = centerX - eyeImage.bitmap.width / 2;
+    const eyeDestY = (eyeBox.top + eyeBoxHeight / 2) * image.bitmap.height;
+
     console.log(
       'eye position',
       'left',
@@ -277,12 +272,14 @@ async function addEyesInBoxes({ buffer, eyeBoxes }, done) {
       eyeDestY
     );
     image.composite(eyeImage, eyeDestX, eyeDestY);
-    //image.composite(eyeImage, rightEyeDestX, eyeDestY);
   }
 }
 
-function labelIsAllowed(label) {
-  return label.length > 1 && labelsToAvoid.indexOf(label) === -1;
+function labelIsAllowed(annotation) {
+  var label = annotation.name;
+  return (
+    label.length > 1 && labelsToAvoid.indexOf(label) === -1 && iscool(label)
+  );
 }
 
 function reportError(error) {
