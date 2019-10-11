@@ -13,6 +13,7 @@ var ep = require('errorback-promise');
 var to = require('await-to-js').to;
 var queue = require('d3-queue').queue;
 var getAtPath = require('get-at-path');
+var pluck = require('lodash.pluck');
 
 var iscool = require('iscool')();
 var sb = require('standard-bail')();
@@ -25,7 +26,16 @@ var eyeImageFiles = [
 
 var eyeImages = [];
 
-var labelsToAvoid = ['font', 'text', 'Font', 'Text', 'Person'];
+var labelsToAvoid = [
+  'font',
+  'text',
+  'Font',
+  'Text',
+  'Person',
+  'Clothing',
+  'Man',
+  'Woman'
+];
 
 const imgLinkRegex = /Size of this preview: <a href="([^"]+)"(\s)/;
 const visionAPIURL =
@@ -33,7 +43,7 @@ const visionAPIURL =
   config.googleVisionAPIKey;
 
 const eyeProportionOfMaxSizeMin = 0.3;
-const eyeProportionOfMaxSizeMax = 0.7;
+const eyeProportionOfMaxSizeMax = 0.5;
 
 const maxTries = 5;
 var tryCount = 0;
@@ -98,17 +108,22 @@ function addEyes(buffer, done) {
       done(new Error('No valid names in localizedObjectAnnotations.'));
       return;
     }
-    var annotation = probable.pick(annotations);
-    const label = annotation.name.replace(/\n/g, '');
 
-    // If we ever want to go back to multiple sets of eyes:
-    //var eyeBoxes = pluck(
-    //  pluck(response.localizedObjectAnnotations, 'boundingPoly'),
-    //  'normalizedVertices'
-    //).map(verticesToBounds);
-    var eyeBoxes = [
-      verticesToBounds(annotation.boundingPoly.normalizedVertices)
-    ];
+    // Multiple annotations often don't work well, but when they do
+    // they're great. Risk it only once in every five times.
+    const numberOfAnnotationsToUse =
+      probable.roll(5) === 0 ? probable.rollDie(annotations.length) : 1;
+    annotations = probable.sample(annotations, numberOfAnnotationsToUse);
+    const label = pluck(annotations, 'name')
+      .map(cleanName)
+      .join(', ');
+
+    var eyeBoxes = pluck(
+      pluck(probable.sample(annotations), 'boundingPoly'),
+      'normalizedVertices'
+    ).map(verticesToBounds);
+    console.log('eyeBoxes', eyeBoxes);
+    eyeBoxes = eyeBoxes.reduce(doesNotOverlapPrevBoxes, []);
     console.log('eyeBoxes', eyeBoxes);
 
     var { error, values } = await ep(addEyesInBoxes, { buffer, eyeBoxes });
@@ -304,5 +319,51 @@ function loadEyes(done) {
       eyeImages = images;
       done();
     }
+  }
+}
+
+function cleanName(name) {
+  return name.replace(/\n/g, '');
+}
+
+function overlaps(bounds1, bounds2) {
+  var left1IsInsideEl2, right1IsInsideEl2, top1IsInsideEl2, bottom1IsInsideEl2;
+
+  left1IsInsideEl2 = nIsInsideRange(bounds1.left, bounds2.left, bounds2.right);
+  if (!left1IsInsideEl2) {
+    right1IsInsideEl2 = nIsInsideRange(
+      bounds1.right,
+      bounds2.left,
+      bounds2.right
+    );
+  }
+
+  top1IsInsideEl2 = nIsInsideRange(bounds1.top, bounds2.top, bounds2.bottom);
+  if (!top1IsInsideEl2) {
+    bottom1IsInsideEl2 = nIsInsideRange(
+      bounds1.bottom,
+      bounds2.top,
+      bounds2.bottom
+    );
+  }
+
+  return (
+    (left1IsInsideEl2 || right1IsInsideEl2) &&
+    (top1IsInsideEl2 || bottom1IsInsideEl2)
+  );
+}
+
+function nIsInsideRange(n, lower, upper) {
+  return n >= lower && n <= upper;
+}
+
+function doesNotOverlapPrevBoxes(prevBoxes, box) {
+  if (!prevBoxes.some(overlapsBox)) {
+    prevBoxes.push(box);
+  }
+  return prevBoxes;
+
+  function overlapsBox(prevBox) {
+    return overlaps(prevBox, box);
   }
 }
