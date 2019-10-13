@@ -42,7 +42,8 @@ var labelsToAvoid = [
   'Top',
   'Pillow',
   'Flute',
-  'Ski'
+  'Ski',
+  'Poster'
 ];
 
 const defaultEyeY = 0.5;
@@ -157,7 +158,7 @@ function addEyes(buffer, done) {
       return;
     }
 
-    done(null, { comment: '👀', label, buffer: values[0] });
+    done(null, { comment: ' ', label, buffer: values[0] });
   }
 }
 
