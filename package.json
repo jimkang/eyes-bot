@@ -1,22 +1,22 @@
 {
-  "name": "the-bot-has-eyes",
+  "name": "eyes-bot",
   "version": "1.0.0",
-  "description": "A self-tagging bot.",
+  "description": "A bot that puts eyes on things. 👀",
   "main": "index.js",
   "scripts": {
     "test": "make test"
   },
   "repository": {
     "type": "git",
-    "url": "git@github.com:jimkang/the-bot-has-eyes.git"
+    "url": "git@github.com:jimkang/eyes-bot.git"
   },
   "keywords": [],
   "author": "Jim Kang",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/jimkang/the-bot-has-eyes/issues"
+    "url": "https://github.com/jimkang/eyes-bot/issues"
   },
-  "homepage": "https://github.com/jimkang/the-bot-has-eyes",
+  "homepage": "https://github.com/jimkang/eyes-bot",
   "devDependencies": {},
   "dependencies": {
     "@jimkang/post-it": "^1.1.1",

@@ -1,6 +1,6 @@
 include config.mk
 
-PROJECTNAME = the-bot-has-eyes
+PROJECTNAME = eyes-bot
 HOMEDIR = $(shell pwd)
 APPDIR = /opt/$(PROJECTNAME)
 

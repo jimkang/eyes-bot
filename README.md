@@ -1,7 +1,7 @@
-the-bot-has-eyes
+eyes-bot
 ==================
 
-Add eyes to things.
+A bot that puts eyes on things. 👀
 
 Installation
 ------------
