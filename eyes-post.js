@@ -34,16 +34,34 @@ var labelsToAvoid = [
   'Person',
   'Clothing',
   'Man',
-  'Woman'
+  'Woman',
+  'Hat',
+  'Outerwear',
+  'Dress',
+  'Packaged goods',
+  'Top',
+  'Pillow',
+  'Flute',
+  'Ski'
 ];
 
 const defaultEyeY = 0.5;
 
 var eyeYForSpecificTopics = {
   Glasses: 0.0,
+  Sunglasses: 0.0,
   Umbrella: 0.0,
   Helmet: 0.05,
-  Table: 0.0
+  Table: 0.0,
+  Animal: 0.3,
+  Cat: 0.2,
+  Dog: 0.2,
+  Bird: 0.2,
+  'Bronze Sculpture': 0.1,
+  Jeans: 0.05,
+  Pants: 0.05,
+  Chair: 0.2,
+  Axe: 0.1
 };
 
 const imgLinkRegex = /Size of this preview: <a href="([^"]+)"(\s)/;
@@ -118,19 +136,20 @@ function addEyes(buffer, done) {
       return;
     }
 
-    // Multiple annotations often don't work well, but when they do
-    // they're great. Risk it only once in every five times.
+    // Use all annotations most of the time; sometimes just a few.
     const numberOfAnnotationsToUse =
-      probable.roll(5) === 0 ? probable.rollDie(annotations.length) : 1;
+      probable.roll(5) === 0
+        ? annotations.length
+        : probable.rollDie(annotations.length);
     annotations = probable.sample(annotations, numberOfAnnotationsToUse);
     const label = pluck(annotations, 'name')
       .map(cleanName)
       .join(', ');
 
     var eyeBoxes = probable.sample(annotations).map(annotationToEyeBox);
-    console.log('eyeBoxes', eyeBoxes);
+    //console.log('eyeBoxes', eyeBoxes);
     eyeBoxes = eyeBoxes.reduce(doesNotOverlapPrevBoxes, []);
-    console.log('eyeBoxes', eyeBoxes);
+    //console.log('eyeBoxes', eyeBoxes);
 
     var { error, values } = await ep(addEyesInBoxes, { buffer, eyeBoxes });
     if (error) {
@@ -283,7 +302,7 @@ async function addEyesInBoxes({ buffer, eyeBoxes }, done) {
       ((eyeProportionOfMaxSizeMax - eyeProportionOfMaxSizeMin) *
         probable.roll(100)) /
         100;
-    console.log('eyeProportionOfMax', eyeProportionOfMax);
+    //console.log('eyeProportionOfMax', eyeProportionOfMax);
     eyeImage.resize(
       eyeImage.bitmap.width * eyeProportionOfMax,
       eyeImage.bitmap.height * eyeProportionOfMax,
@@ -297,15 +316,15 @@ async function addEyesInBoxes({ buffer, eyeBoxes }, done) {
     const eyeDestY =
       (eyeBox.bounds.top + eyeBoxHeight * eyeY) * image.bitmap.height;
 
-    console.log(
-      'eye position',
-      'left',
-      eyeDestX,
-      'right',
-      eyeDestX,
-      'y',
-      eyeDestY
-    );
+    //console.log(
+    //  'eye position',
+    //  'left',
+    //  eyeDestX,
+    //  'right',
+    //  eyeDestX,
+    //  'y',
+    //  eyeDestY
+    //);
     image.composite(eyeImage, eyeDestX, eyeDestY);
   }
 }
