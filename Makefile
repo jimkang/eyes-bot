@@ -13,3 +13,11 @@ sync:
 
 prettier:
 	prettier --single-quote --write "**/*.js"
+
+# This doesn't quite work. Hit Ctrl-C when you've had enough. Or fix this.
+run-multiple:
+	number=1 ; while [ $$number -le 10 ] ; do \
+		node eyes-post.js --dry; \
+		((number = number + 1)) ; \
+	done
+

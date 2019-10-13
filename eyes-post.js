@@ -37,6 +37,15 @@ var labelsToAvoid = [
   'Woman'
 ];
 
+const defaultEyeY = 0.5;
+
+var eyeYForSpecificTopics = {
+  Glasses: 0.0,
+  Umbrella: 0.0,
+  Helmet: 0.05,
+  Table: 0.0
+};
+
 const imgLinkRegex = /Size of this preview: <a href="([^"]+)"(\s)/;
 const visionAPIURL =
   'https://vision.googleapis.com/v1/images:annotate?key=' +
@@ -118,10 +127,7 @@ function addEyes(buffer, done) {
       .map(cleanName)
       .join(', ');
 
-    var eyeBoxes = pluck(
-      pluck(probable.sample(annotations), 'boundingPoly'),
-      'normalizedVertices'
-    ).map(verticesToBounds);
+    var eyeBoxes = probable.sample(annotations).map(annotationToEyeBox);
     console.log('eyeBoxes', eyeBoxes);
     eyeBoxes = eyeBoxes.reduce(doesNotOverlapPrevBoxes, []);
     console.log('eyeBoxes', eyeBoxes);
@@ -201,6 +207,13 @@ function wrapUp(error, data) {
   }
 }
 
+function annotationToEyeBox(annotation) {
+  return {
+    name: annotation.name,
+    bounds: verticesToBounds(annotation.boundingPoly.normalizedVertices)
+  };
+}
+
 // Assumes vertices describe a polygon.
 function verticesToBounds(vertices) {
   return vertices.reduce(updateBoundsWithVertex, {
@@ -250,11 +263,17 @@ async function addEyesInBoxes({ buffer, eyeBoxes }, done) {
   image.getBuffer(Jimp.MIME_JPEG, done);
 
   function addEyesInBox(eyeBox) {
+    var eyeY = eyeYForSpecificTopics[eyeBox.name];
+    if (eyeY === undefined) {
+      eyeY = defaultEyeY;
+    }
+
     // eyeBox values are normalized to 0.0 to 1.0.
-    const eyeBoxWidth = eyeBox.right - eyeBox.left;
-    const eyeBoxHeight = eyeBox.bottom - eyeBox.top;
+    const eyeBoxWidth = eyeBox.bounds.right - eyeBox.bounds.left;
+    const eyeBoxHeight = eyeBox.bounds.bottom - eyeBox.bounds.top;
     const eyesMaxWidth = eyeBoxWidth * image.bitmap.width;
-    const eyesMaxHeight = (eyeBox.bottom - eyeBox.top) * image.bitmap.height;
+    const eyesMaxHeight =
+      (eyeBox.bounds.bottom - eyeBox.bounds.top) * image.bitmap.height;
 
     var eyeImage = probable.pick(eyeImages).clone();
     eyeImage.contain(eyesMaxWidth, eyesMaxHeight);
@@ -272,10 +291,11 @@ async function addEyesInBoxes({ buffer, eyeBoxes }, done) {
     );
     //console.log('eyeImage size', eyeImage.bitmap.width, eyeImage.bitmap.height);
 
-    const centerX = (eyeBox.left + eyeBoxWidth / 2) * image.bitmap.width;
+    const centerX = (eyeBox.bounds.left + eyeBoxWidth / 2) * image.bitmap.width;
 
     const eyeDestX = centerX - eyeImage.bitmap.width / 2;
-    const eyeDestY = (eyeBox.top + eyeBoxHeight / 2) * image.bitmap.height;
+    const eyeDestY =
+      (eyeBox.bounds.top + eyeBoxHeight * eyeY) * image.bitmap.height;
 
     console.log(
       'eye position',
@@ -364,6 +384,6 @@ function doesNotOverlapPrevBoxes(prevBoxes, box) {
   return prevBoxes;
 
   function overlapsBox(prevBox) {
-    return overlaps(prevBox, box);
+    return overlaps(prevBox.bounds, box.bounds);
   }
 }
