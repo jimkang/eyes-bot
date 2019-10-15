@@ -20,11 +20,27 @@ var sb = require('standard-bail')();
 
 var dryRun = process.argv.length > 2 ? process.argv[2] === '--dry' : false;
 
-var eyeImageFiles = [
-  'eyes-293957_640.png' // https://pixabay.com/vectors/eyes-looking-view-look-watch-293957/
+var eyeImageFileTableDef = [
+  [5, 'eyes-293957_640.png'], // https://pixabay.com/vectors/eyes-looking-view-look-watch-293957/
+  [3, 'eye-1756629_640-paired.png'], // https://pixabay.com/illustrations/eye-blue-people-look-pupil-iris-1756629/
+  // eyes-clipart from: https://pixabay.com/vectors/eyes-fun-mouth-parts-rolling-eyes-160317/
+  [1, 'eyes-clipart-01.png'],
+  [1, 'eyes-clipart-02.png'],
+  [1, 'eyes-clipart-03.png'],
+  [1, 'eyes-clipart-04.png'],
+  [1, 'eyes-clipart-05.png'],
+  [1, 'eyes-clipart-06.png'],
+  [1, 'eyes-clipart-07.png'],
+  [1, 'eyes-clipart-08.png'],
+  [1, 'eyes-clipart-09.png'],
+  [1, 'eyes-clipart-10.png'],
+  [1, 'eyes-clipart-11.png'],
+  [1, 'eyes-clipart-12.png'],
+  [1, 'eyes-clipart-13.png']
 ];
 
-var eyeImages = [];
+var eyeImageFileTable = probable.createTableFromSizes(eyeImageFileTableDef);
+var eyeImagesForFilenames = {};
 
 var labelsToAvoid = [
   'font',
@@ -295,7 +311,7 @@ async function addEyesInBoxes({ buffer, eyeBoxes }, done) {
     const eyesMaxHeight =
       (eyeBox.bounds.bottom - eyeBox.bounds.top) * image.bitmap.height;
 
-    var eyeImage = probable.pick(eyeImages).clone();
+    var eyeImage = eyeImagesForFilenames[eyeImageFileTable.roll()].clone();
     eyeImage.contain(eyesMaxWidth, eyesMaxHeight);
     //console.log('eyeImage size', eyeImage.bitmap.width, eyeImage.bitmap.height);
     const eyeProportionOfMax =
@@ -345,19 +361,23 @@ function reportError(error) {
 
 function loadEyes(done) {
   var q = queue();
-  eyeImageFiles.forEach(queueLoad);
-  q.awaitAll(saveImages);
+  pluck(eyeImageFileTableDef, '1').forEach(queueLoad);
+  q.awaitAll(done);
 
   function queueLoad(imageFile) {
-    q.defer(Jimp.read.bind(Jimp), `${__dirname}/eyes/${imageFile}`);
+    q.defer(loadAndSave, imageFile);
   }
 
-  function saveImages(error, images) {
-    if (error) {
-      done(error);
-    } else {
-      eyeImages = images;
-      done();
+  function loadAndSave(imageFile, saveDone) {
+    Jimp.read(`${__dirname}/eyes/${imageFile}`, readDone);
+
+    function readDone(error, image) {
+      if (error) {
+        saveDone(error);
+      } else {
+        eyeImagesForFilenames[imageFile] = image;
+        saveDone();
+      }
     }
   }
 }
